@@ -167,9 +167,6 @@ ggplot(weather_lines, aes(DAY, MinTemp))+
   theme(plot.title = element_markdown())
 ```
 
-**Part 3**
-
-My favorite part of this course has been learning how to mess with the aesthetics of the plots. I have always enjoy art and art classes however I am not a great artist. I have found that these types of courses you rarely have the opportunity to have any kind of artist creativity. When making the graphs you are given the opportunity each time to put your own little artistic flare into them which I really enjoy. I also enjoy just watching the graph slowly come into how you want it to look with each little change that is made. 
 
 
 
