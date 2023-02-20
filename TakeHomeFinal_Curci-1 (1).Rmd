@@ -1,0 +1,181 @@
+---
+title: "Take Home Final"
+author: "Rachel Curci"
+date: "2022-12-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(kableExtra)
+library(ggtext)
+```
+
+
+**Set Up**
+```{r}
+## loading in data  
+weather <- read.csv("brookvilleWeatherData.csv")
+```
+```{r}
+## fixing date format
+weather <- weather %>% 
+  mutate(DATE = lubridate::ymd(DATE))
+```
+
+**Part 1**
+Data handling and creating table
+```{r pt1 wider}
+## switching from long to wide format to create table
+weather_wide <- weather %>% 
+  pivot_wider(names_from = Measure, 
+              values_from = Value) %>% 
+  mutate(mintemp = TMIN /10,
+         maxtemp = TMAX / 10,
+         mintempF = (mintemp * (9/5))+32,
+         maxtempF = (maxtemp * (9/5))+32) %>% 
+  select(DATE, mintempF, maxtempF) %>% 
+  drop_na()
+```
+
+```{r pt1 table}
+### converting tenth degrees to actual degree and Fahrenheit and making into a table using the kableExtra package
+weather_pt1_table <- weather_wide %>% 
+  filter(between(DATE, as.Date('1930-01-01'), as.Date('2021-12-31'))) %>% 
+  mutate(Month = month(DATE)) %>% 
+  group_by(Month) %>% 
+  summarize(`Average Low Temperature` = mean(mintempF),
+         `Standard Deviation of Low Temperatures` = sd(mintempF),
+         `Average High Temperature` = mean(maxtempF),
+         `Standard Deviation of High Temperatures` = sd(maxtempF)) %>% 
+  mutate(Month = month.abb[Month]) %>% 
+  kbl(caption = "Part 1 Table: Average and Stand Deviation for the High and Low Temperatures of Each Month from 1930 through 2021") %>% 
+  kable_styling(full_width = F, html_font = "Cambria") ## source: https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html
+weather_pt1_table
+```
+
+
+
+**Part 2**
+More data handling, fitting local linear regression prediction model, and creating the final plot
+```{r pt2 ribbon}
+## Gathering correct dates for pt2 ribbon as well as the month and day so I can have a variable for every day of the year.
+## summarizing min and max temps for each Monthday of the year giving me 365 days of min and max temps after removing feb 29
+weather_ribbon <- weather_wide %>% 
+  filter(between(DATE, as.Date('1930-01-01'), as.Date('2010-12-31'))) %>% 
+  mutate(MonthDay = format(as.Date(DATE), "%m-%d")) %>%
+  mutate(Month = month(DATE),
+         Day = day(DATE)) %>% 
+  filter(MonthDay != '02-29') %>% 
+  group_by(MonthDay, Month, Day) %>% 
+  summarize(MinTemp = mean(mintempF),
+            MaxTemp = mean(maxtempF)) 
+
+## creating a numeric variable for the day of the year since the monthday variable is a character variable and difficult to plot as well as tricky for the regression
+DAY <- 1:365
+DAY <- as.list(DAY)
+weather_ribbon$DAY <- DAY
+weather_ribbon <- weather_ribbon %>% 
+  mutate(DAY = as.numeric(DAY))
+
+## preforming regression
+mintemploess <- loess(MinTemp ~ DAY, data = weather_ribbon, span = .75)
+smoothmin <- predict(mintemploess)
+smoothmin <- as.list(smoothmin)
+maxtemploess <- loess(MaxTemp ~ DAY, data = weather_ribbon, span = .75)
+smoothmax <- predict(maxtemploess)
+smoothmax <- as.list(smoothmax)
+
+## adding predictor values to data frame for plotting
+weather_ribbon$Smoothmin <- smoothmin
+weather_ribbon$Smoothmax <- smoothmax
+weather_ribbon <- weather_ribbon %>% 
+  mutate(Smoothmin = as.numeric(Smoothmin),
+         Smoothmax = as.numeric(Smoothmax))
+
+
+```
+```{r pt2 lines}
+weather_lines <- weather_wide %>% 
+  filter(between(DATE, as.Date('2011-01-01'), as.Date('2021-12-31'))) %>%  
+  mutate(MonthDay = format(as.Date(DATE), "%m-%d")) %>%
+  filter(MonthDay != '02-29') %>%  
+  group_by(MonthDay) %>% 
+  summarize(MinTemp = mean(mintempF),
+            MaxTemp = mean(maxtempF))
+## adding numeric day variable 
+weather_lines$DAY <- DAY
+weather_lines <- weather_lines %>% 
+  mutate(DAY = as.numeric(DAY))
+
+```
+```{r}
+## making data frames for the rectangles on the plot
+Jan_rect <- data.frame(x = c(2, 25,25,2), y = c(46,46,14,14))
+Feb_rect <- data.frame(x = c(85,32,32,85), y = c(60,60,18,18))
+Dec_rect <- data.frame(x = c(335,364,364,335), y =c(55,55,20,20))
+Oct_rect <- data.frame(x = c(283,330,330, 283), y = c(28,28,70,70))
+
+```
+
+```{r fig1, fig.height = 12, fig.width = 15, fig.align = "center"}
+ggplot(weather_lines, aes(DAY, MinTemp))+ 
+  annotate("segment", x=31, xend = 31, y = 0, yend =90.25455, size = 0.5, color = "gray75")+ ## using these to segment off each month exactly
+  annotate("segment", x=59, xend = 59, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=90, xend = 90, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=120, xend = 120, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=151, xend = 151, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=181, xend = 181, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=212, xend = 212, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=243, xend = 243, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=273, xend = 273, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=304, xend = 304, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  annotate("segment", x=334, xend = 334, y = 0, yend =90.25455, size = 0.5, color = "gray75")+
+  geom_label(x = 196, y = 41, label = "January and December seem to be the months with\nthe warmest average temp compared to those predicted.", color = "red", size = 5)+
+  geom_label(x=196, y = 35, label = "However, the months directly before and after December and January\noften experience temperatures cooler than the precited values.", color = "blue", size = 5)+
+  geom_label(x = 75, y = 85, label = "The summer months primarly have temperatures \nthat are slightly warmer than the predicted values.", size = 5)+
+  geom_ribbon(data = weather_ribbon, aes(x = DAY,ymin = Smoothmin, ymax = Smoothmax), 
+              fill = "forestgreen", alpha = 0.2)+
+  geom_line(data = weather_ribbon, aes(DAY,Smoothmin,group=1), color = "forestgreen", size = 0.6)+ ## wanted to make the bounds on the ribbon pop a bit more
+  geom_line(data = weather_ribbon, aes(DAY, Smoothmax, group=1), color ="forestgreen", size = 0.6)+
+  geom_line(data = weather_lines, aes(DAY,MinTemp, group = 1), color = "blue", size = 0.9)+
+  geom_line(data = weather_lines, aes(DAY, MaxTemp, group =1), color = "red", size = 0.9)+
+  scale_x_continuous(breaks = c(15,46,75,105,135,166,196,227,258,288,319,349),
+                     labels = c("Jan","Feb","Mar","Apr","May","Jun","Jul", "Aug", "Sep","Oct","Nov","Dec"))+
+  scale_y_continuous(limits = c(0,90.25455),breaks = c(0,30,60,90),minor_breaks = c(15,45,75))+
+  geom_polygon(data = Jan_rect, aes(x = x, y = y, group =1), color = "red", 
+               fill = "red", alpha = 0.1)+
+  geom_polygon(data = Dec_rect, aes(x = x, y = y, group = 1), color = "red", 
+               fill = "red", alpha = 0.1)+
+  geom_polygon(data = Feb_rect, aes(x = x, y = y, group = 1), color = "blue", 
+               fill = "blue", alpha = 0.1)+
+  geom_polygon(data = Oct_rect, aes(x = x, y = y, group = 1), color = "blue", 
+               fill = "blue", alpha = 0.1)+
+  coord_cartesian(expand = FALSE)+
+  theme_minimal()+
+  theme(axis.title.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(), 
+        axis.text = element_text(size = 13),
+        plot.caption = element_text(size = 12,family="Courier New"),
+        axis.title.y = element_text(size = 15),
+        plot.title = element_text(size = 18), 
+        plot.subtitle = element_text(size = 13))+
+  labs(y = "Temperature (Fahrenheit)", caption = "Source: National Centers for Environmental Information (NCEI)", title = "Average <span style='color:red'>High</span> and <span style='color:blue'>Low</span> Temperatures from 2011-2021 in Brookville, Indiana with <span style='color:forestgreen'>Predicited Average Temperatures</span>", subtitle = "Local Linear Regression Prediction model uses average temperatures from 1930 through 2010")+
+  theme(plot.title = element_markdown())
+```
+
+**Part 3**
+
+My favorite part of this course has been learning how to mess with the aesthetics of the plots. I have always enjoy art and art classes however I am not a great artist. I have found that these types of courses you rarely have the opportunity to have any kind of artist creativity. When making the graphs you are given the opportunity each time to put your own little artistic flare into them which I really enjoy. I also enjoy just watching the graph slowly come into how you want it to look with each little change that is made. 
+
+
+
+
+
+
+
+
+
